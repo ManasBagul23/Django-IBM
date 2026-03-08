@@ -12,7 +12,52 @@ import logging
 logger = logging.getLogger(__name__)
 # Create your views here.
 
+from django.shortcuts import render, get_object_or_404, redirect
+from .models import Course, Enrollment, Submission, Choice, Question
 
+
+def submit(request, course_id):
+
+    course = get_object_or_404(Course, pk=course_id)
+    enrollment = Enrollment.objects.get(user=request.user, course=course)
+
+    submission = Submission.objects.create(enrollment=enrollment)
+
+    choices = request.POST.getlist('choice')
+
+    for choice_id in choices:
+        choice = Choice.objects.get(id=int(choice_id))
+        submission.choices.add(choice)
+
+    return redirect('onlinecourse:show_exam_result', course_id=course.id, submission_id=submission.id)
+
+
+def show_exam_result(request, course_id, submission_id):
+
+    course = get_object_or_404(Course, pk=course_id)
+    submission = Submission.objects.get(pk=submission_id)
+
+    selected_choices = submission.choices.all()
+    selected_ids = [choice.id for choice in selected_choices]
+
+    questions = Question.objects.filter(lesson__course=course)
+
+    total_score = 0
+    possible_score = 0
+
+    for question in questions:
+        possible_score += question.grade
+        total_score += question.is_get_score(selected_ids)
+
+    context = {
+        'course': course,
+        'selected_ids': selected_ids,
+        'grade': total_score,
+        'possible': possible_score
+    }
+
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
+    
 def registration_request(request):
     context = {}
     if request.method == 'GET':
